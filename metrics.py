@@ -10,73 +10,63 @@ import re
 
 # Set page config
 st.set_page_config(
-    page_title="Answer Comparison Tool",
+    page_title="Model Prediction Comparison",
     page_icon="📊",
     layout="wide"
 )
 
-# Custom CSS
+# Add custom styling
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
+    .header-text {
+        font-size: 2rem;
         font-weight: bold;
         color: #1E3A8A;
-        margin-bottom: 1rem;
     }
-    .sub-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2563EB;
-        margin-bottom: 0.5rem;
-    }
-    .metric-card {
+    .metric-container {
         background-color: #F3F4F6;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .highlight {
-        background-color: #DBEAFE;
-        padding: 0.1rem 0.2rem;
-        border-radius: 0.2rem;
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        text-align: center;
+    }
+    .metric-label {
+        font-size: 1rem;
+        text-align: center;
+        color: #6B7280;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Title
-st.markdown('<p class="main-header">Student-Teacher Answer Comparison Tool</p>', unsafe_allow_html=True)
-st.markdown("Upload JSON files containing student and teacher answers to compare them using ROUGE and BLEU scores.")
+st.markdown('<p class="header-text">Model Prediction Comparison Tool</p>', unsafe_allow_html=True)
+st.markdown("Compare model predictions with golden data using ROUGE and BLEU scores")
 
-# Initialize session state variables
-if 'uploaded_files' not in st.session_state:
-    st.session_state.uploaded_files = []
-if 'comparison_results' not in st.session_state:
-    st.session_state.comparison_results = []
-if 'processing_done' not in st.session_state:
-    st.session_state.processing_done = False
-
-# Function to clean and tokenize text
+# Function to preprocess text
 def preprocess_text(text):
-    # Convert to string if not already
     if not isinstance(text, str):
         text = str(text)
     
-    # Replace LaTeX-style math with placeholders
-    text = re.sub(r'\\[a-zA-Z]+', 'MATHSYMBOL', text)
-    
-    # Replace Unicode math symbols with placeholders
-    text = re.sub(r'[√∛∜∫∬∭∮∯∰∱∲∳⨌]', 'MATHSYMBOL', text)
-    
-    # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    # Replace special characters and normalize whitespace
+    text = re.sub(r'\\[a-zA-Z]+', ' ', text)  # Remove LaTeX commands
+    text = re.sub(r'[^\w\s.,?!]', ' ', text)  # Keep basic punctuation
+    text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
     
     return text
 
 # Function to calculate BLEU score
 def calculate_bleu(reference, candidate):
     if not reference or not candidate:
-        return 0.0
+        return {
+            'bleu_1': 0.0,
+            'bleu_2': 0.0,
+            'bleu_3': 0.0,
+            'bleu_4': 0.0
+        }
     
     # Preprocess texts
     ref_processed = preprocess_text(reference)
@@ -87,29 +77,27 @@ def calculate_bleu(reference, candidate):
     candidate_tokens = cand_processed.split()
     
     if not reference_tokens or not candidate_tokens:
-        return 0.0
+        return {
+            'bleu_1': 0.0,
+            'bleu_2': 0.0,
+            'bleu_3': 0.0,
+            'bleu_4': 0.0
+        }
     
     # Calculate BLEU score with smoothing
     smoothie = SmoothingFunction().method1
     
-    # Calculate for different n-gram weights
-    weights_1 = (1, 0, 0, 0)  # Unigrams only
-    weights_2 = (0.5, 0.5, 0, 0)  # Bigrams and unigrams
-    weights_3 = (0.33, 0.33, 0.33, 0)  # Up to trigrams
-    weights_4 = (0.25, 0.25, 0.25, 0.25)  # Up to 4-grams
-    
     try:
-        bleu_1 = sentence_bleu([reference_tokens], candidate_tokens, weights=weights_1, smoothing_function=smoothie)
-        bleu_2 = sentence_bleu([reference_tokens], candidate_tokens, weights=weights_2, smoothing_function=smoothie)
-        bleu_3 = sentence_bleu([reference_tokens], candidate_tokens, weights=weights_3, smoothing_function=smoothie)
-        bleu_4 = sentence_bleu([reference_tokens], candidate_tokens, weights=weights_4, smoothing_function=smoothie)
+        bleu_1 = sentence_bleu([reference_tokens], candidate_tokens, weights=(1, 0, 0, 0), smoothing_function=smoothie)
+        bleu_2 = sentence_bleu([reference_tokens], candidate_tokens, weights=(0.5, 0.5, 0, 0), smoothing_function=smoothie)
+        bleu_3 = sentence_bleu([reference_tokens], candidate_tokens, weights=(0.33, 0.33, 0.33, 0), smoothing_function=smoothie)
+        bleu_4 = sentence_bleu([reference_tokens], candidate_tokens, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smoothie)
         
         return {
             'bleu_1': bleu_1,
             'bleu_2': bleu_2,
             'bleu_3': bleu_3,
-            'bleu_4': bleu_4,
-            'bleu_avg': (bleu_1 + bleu_2 + bleu_3 + bleu_4) / 4
+            'bleu_4': bleu_4
         }
     except Exception as e:
         st.error(f"Error calculating BLEU score: {e}")
@@ -117,19 +105,15 @@ def calculate_bleu(reference, candidate):
             'bleu_1': 0.0,
             'bleu_2': 0.0,
             'bleu_3': 0.0,
-            'bleu_4': 0.0,
-            'bleu_avg': 0.0
+            'bleu_4': 0.0
         }
 
 # Function to calculate ROUGE scores
 def calculate_rouge(reference, candidate):
     if not reference or not candidate:
         return {
-            'rouge1_precision': 0.0,
-            'rouge1_recall': 0.0,
             'rouge1_f1': 0.0,
-            'rougeL_precision': 0.0,
-            'rougeL_recall': 0.0,
+            'rouge2_f1': 0.0,
             'rougeL_f1': 0.0
         }
     
@@ -138,282 +122,358 @@ def calculate_rouge(reference, candidate):
     cand_processed = preprocess_text(candidate)
     
     # Initialize Rouge scorer
-    scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
     
     try:
         scores = scorer.score(ref_processed, cand_processed)
         
         return {
-            'rouge1_precision': scores['rouge1'].precision,
-            'rouge1_recall': scores['rouge1'].recall,
             'rouge1_f1': scores['rouge1'].fmeasure,
-            'rougeL_precision': scores['rougeL'].precision,
-            'rougeL_recall': scores['rougeL'].recall,
+            'rouge2_f1': scores['rouge2'].fmeasure,
             'rougeL_f1': scores['rougeL'].fmeasure
         }
     except Exception as e:
         st.error(f"Error calculating ROUGE score: {e}")
         return {
-            'rouge1_precision': 0.0,
-            'rouge1_recall': 0.0,
             'rouge1_f1': 0.0,
-            'rougeL_precision': 0.0,
-            'rougeL_recall': 0.0,
+            'rouge2_f1': 0.0,
             'rougeL_f1': 0.0
         }
 
-# Function to process uploaded JSON files
-def process_files(uploaded_files):
-    results = []
-    
-    for uploaded_file in uploaded_files:
-        try:
-            # Read JSON content
-            content = uploaded_file.read()
-            data = json.loads(content)
-            
-            # Extract relevant fields
-            question = data.get('question', '')
-            teacher_answer = data.get('Teacher_Answer', '')
-            student_answer = data.get('Student_Answer', '')
-            accuracy = data.get('Accuracy', '')
-            overall_score = data.get('Overall Score', '')
-            max_marks = data.get('MaximumMarks', '')
-            
-            # Calculate BLEU scores
-            bleu_scores = calculate_bleu(teacher_answer, student_answer)
-            
-            # Calculate ROUGE scores
-            rouge_scores = calculate_rouge(teacher_answer, student_answer)
-            
-            # Combine results
-            result = {
-                'filename': uploaded_file.name,
-                'question': question,
-                'teacher_answer': teacher_answer,
-                'student_answer': student_answer,
-                'accuracy': accuracy,
-                'overall_score': overall_score,
-                'max_marks': max_marks,
-                **bleu_scores,
-                **rouge_scores
-            }
-            
-            results.append(result)
-            
-        except Exception as e:
-            st.error(f"Error processing file {uploaded_file.name}: {e}")
-    
-    return results
+# Main app layout
+st.sidebar.header("Upload Options")
 
-# File uploader
-with st.expander("Upload Files", expanded=True):
-    uploaded_files = st.file_uploader(
-        "Upload JSON files containing student and teacher answers",
-        type=["json"],
-        accept_multiple_files=True
-    )
-    
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        process_button = st.button("Process Files", type="primary")
-    
-    if process_button and uploaded_files:
-        st.session_state.uploaded_files = uploaded_files
-        with st.spinner("Processing files..."):
-            st.session_state.comparison_results = process_files(uploaded_files)
-            st.session_state.processing_done = True
-            st.success(f"Successfully processed {len(uploaded_files)} files!")
+# File upload widgets
+golden_file = st.sidebar.file_uploader("Upload Golden Data (JSON)", type="json")
+prediction_file = st.sidebar.file_uploader("Upload Model Predictions (JSON)", type="json")
 
-# Display results if processing is done
-if st.session_state.processing_done and st.session_state.comparison_results:
-    results = st.session_state.comparison_results
-    
-    # Summary metrics
-    st.markdown('<p class="sub-header">Summary Metrics</p>', unsafe_allow_html=True)
-    
-    # Create summary dataframe
-    summary_df = pd.DataFrame([{
-        'Filename': result['filename'],
-        'BLEU-1': result['bleu_1'],
-        'BLEU-2': result['bleu_2'],
-        'BLEU-4': result['bleu_4'],
-        'ROUGE-1 F1': result['rouge1_f1'],
-        'ROUGE-L F1': result['rougeL_f1'],
-        'Accuracy': result['accuracy'],
-        'Score': f"{result['overall_score']}/{result['max_marks']}" if result['max_marks'] else result['overall_score']
-    } for result in results])
-    
-    st.dataframe(summary_df, use_container_width=True)
-    
-    # Visualizations
-    st.markdown('<p class="sub-header">Visualizations</p>', unsafe_allow_html=True)
-    
-    if len(results) > 1:
-        # Multiple files - show comparisons
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+# Comparison field selection
+if golden_file and prediction_file:
+    # Load data
+    try:
+        golden_data = json.load(golden_file)
+        prediction_data = json.load(prediction_file)
         
-        # BLEU scores
-        bleu_df = pd.DataFrame([{
-            'Filename': result['filename'],
-            'BLEU-1': result['bleu_1'],
-            'BLEU-2': result['bleu_2'],
-            'BLEU-3': result['bleu_3'],
-            'BLEU-4': result['bleu_4'],
-        } for result in results])
-        
-        bleu_df_melted = pd.melt(bleu_df, id_vars=['Filename'], var_name='Metric', value_name='Score')
-        sns.barplot(x='Filename', y='Score', hue='Metric', data=bleu_df_melted, ax=ax1)
-        ax1.set_title('BLEU Scores Comparison')
-        ax1.set_ylim(0, 1)
-        ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45, ha='right')
-        
-        # ROUGE scores
-        rouge_df = pd.DataFrame([{
-            'Filename': result['filename'],
-            'ROUGE-1 F1': result['rouge1_f1'],
-            'ROUGE-L F1': result['rougeL_f1'],
-        } for result in results])
-        
-        rouge_df_melted = pd.melt(rouge_df, id_vars=['Filename'], var_name='Metric', value_name='Score')
-        sns.barplot(x='Filename', y='Score', hue='Metric', data=rouge_df_melted, ax=ax2)
-        ax2.set_title('ROUGE Scores Comparison')
-        ax2.set_ylim(0, 1)
-        ax2.set_xticklabels(ax2.get_xticklabels(), rotation=45, ha='right')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-    
-    # Detailed results for each file
-    st.markdown('<p class="sub-header">Detailed Results</p>', unsafe_allow_html=True)
-    
-    for i, result in enumerate(results):
-        with st.expander(f"File: {result['filename']}", expanded=i==0):
-            col1, col2 = st.columns(2)
+        # If data is loaded as a list of dictionaries
+        if isinstance(golden_data, list) and len(golden_data) > 0:
+            # Show first item for field selection
+            sample_golden = golden_data[0]
+        else:
+            # Single item case
+            sample_golden = golden_data
             
-            with col1:
-                st.markdown("**Question:**")
-                st.markdown(f"<div class='metric-card'>{result['question']}</div>", unsafe_allow_html=True)
+        if isinstance(prediction_data, list) and len(prediction_data) > 0:
+            sample_prediction = prediction_data[0]
+        else:
+            sample_prediction = prediction_data
+        
+        # Get available fields
+        golden_fields = list(sample_golden.keys())
+        prediction_fields = list(sample_prediction.keys())
+        
+        # Field selection
+        st.sidebar.subheader("Select Fields to Compare")
+        
+        golden_field = st.sidebar.selectbox(
+            "Golden Data Field",
+            golden_fields,
+            index=golden_fields.index("Teacher_Answer") if "Teacher_Answer" in golden_fields else 0
+        )
+        
+        prediction_field = st.sidebar.selectbox(
+            "Prediction Field",
+            prediction_fields,
+            index=prediction_fields.index("Student_Answer") if "Student_Answer" in prediction_fields else 0
+        )
+        
+        # ID field for matching items (if data is in list format)
+        has_multiple_items = (isinstance(golden_data, list) and len(golden_data) > 1) or \
+                            (isinstance(prediction_data, list) and len(prediction_data) > 1)
+        
+        if has_multiple_items:
+            st.sidebar.subheader("Match Items By")
+            common_fields = list(set(golden_fields).intersection(set(prediction_fields)))
+            id_field = st.sidebar.selectbox(
+                "ID Field", 
+                common_fields,
+                index=common_fields.index("question") if "question" in common_fields else 0
+            )
+        else:
+            id_field = None
+        
+        # Process data and generate comparison
+        if st.sidebar.button("Run Comparison", type="primary"):
+            with st.spinner("Processing data..."):
+                results = []
                 
-                st.markdown("**Teacher's Answer:**")
-                st.markdown(f"<div class='metric-card'>{result['teacher_answer']}</div>", unsafe_allow_html=True)
+                # Prepare data for processing
+                if has_multiple_items:
+                    # Create dictionaries keyed by ID field for easy matching
+                    golden_dict = {item.get(id_field, i): item for i, item in enumerate(golden_data)} if isinstance(golden_data, list) else {0: golden_data}
+                    prediction_dict = {item.get(id_field, i): item for i, item in enumerate(prediction_data)} if isinstance(prediction_data, list) else {0: prediction_data}
+                    
+                    # Find matching items
+                    all_ids = set(golden_dict.keys()).intersection(set(prediction_dict.keys()))
+                    
+                    for item_id in all_ids:
+                        golden_item = golden_dict[item_id]
+                        prediction_item = prediction_dict[item_id]
+                        
+                        golden_text = golden_item.get(golden_field, "")
+                        prediction_text = prediction_item.get(prediction_field, "")
+                        
+                        # Calculate scores
+                        bleu_scores = calculate_bleu(golden_text, prediction_text)
+                        rouge_scores = calculate_rouge(golden_text, prediction_text)
+                        
+                        results.append({
+                            'id': item_id,
+                            'golden_text': golden_text,
+                            'prediction_text': prediction_text,
+                            **bleu_scores,
+                            **rouge_scores
+                        })
+                else:
+                    # Single item comparison
+                    golden_text = sample_golden.get(golden_field, "")
+                    prediction_text = sample_prediction.get(prediction_field, "")
+                    
+                    # Calculate scores
+                    bleu_scores = calculate_bleu(golden_text, prediction_text)
+                    rouge_scores = calculate_rouge(golden_text, prediction_text)
+                    
+                    results.append({
+                        'id': 'Single item',
+                        'golden_text': golden_text,
+                        'prediction_text': prediction_text,
+                        **bleu_scores,
+                        **rouge_scores
+                    })
                 
-                st.markdown("**Student's Answer:**")
-                st.markdown(f"<div class='metric-card'>{result['student_answer']}</div>", unsafe_allow_html=True)
-            
-            with col2:
-                # BLEU scores
-                st.markdown("**BLEU Scores:**")
-                bleu_df = pd.DataFrame({
-                    'Metric': ['BLEU-1', 'BLEU-2', 'BLEU-3', 'BLEU-4', 'BLEU-Average'],
-                    'Score': [
-                        result['bleu_1'],
-                        result['bleu_2'],
-                        result['bleu_3'],
-                        result['bleu_4'],
-                        result['bleu_avg']
-                    ]
-                })
-                st.dataframe(bleu_df, use_container_width=True)
-                
-                # ROUGE scores
-                st.markdown("**ROUGE Scores:**")
-                rouge_df = pd.DataFrame({
-                    'Metric': ['ROUGE-1 Precision', 'ROUGE-1 Recall', 'ROUGE-1 F1', 
-                              'ROUGE-L Precision', 'ROUGE-L Recall', 'ROUGE-L F1'],
-                    'Score': [
-                        result['rouge1_precision'],
-                        result['rouge1_recall'],
-                        result['rouge1_f1'],
-                        result['rougeL_precision'],
-                        result['rougeL_recall'],
-                        result['rougeL_f1']
-                    ]
-                })
-                st.dataframe(rouge_df, use_container_width=True)
-                
-                # Visualization
-                fig, ax = plt.subplots(figsize=(8, 4))
-                metrics = ['BLEU-1', 'BLEU-2', 'BLEU-3', 'BLEU-4', 'ROUGE-1 F1', 'ROUGE-L F1']
-                scores = [
-                    result['bleu_1'], 
-                    result['bleu_2'], 
-                    result['bleu_3'], 
-                    result['bleu_4'], 
-                    result['rouge1_f1'], 
-                    result['rougeL_f1']
-                ]
-                
-                bars = ax.bar(metrics, scores, color=['#1F77B4', '#1F77B4', '#1F77B4', '#1F77B4', '#FF7F0E', '#FF7F0E'])
-                ax.set_ylim(0, 1)
-                ax.set_title('Similarity Metrics')
-                ax.set_ylabel('Score')
-                
-                # Add value labels
-                for bar in bars:
-                    height = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                            f'{height:.2f}', ha='center', va='bottom')
-                
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-                st.pyplot(fig)
-
-# Settings and options
-with st.sidebar:
-    st.markdown("## Options")
-    st.markdown("### Display Settings")
+                # Display results
+                if results:
+                    # Overall metrics
+                    avg_bleu1 = np.mean([r['bleu_1'] for r in results])
+                    avg_bleu4 = np.mean([r['bleu_4'] for r in results])
+                    avg_rouge1 = np.mean([r['rouge1_f1'] for r in results])
+                    avg_rougeL = np.mean([r['rougeL_f1'] for r in results])
+                    
+                    # Display summary metrics
+                    st.subheader("Summary Metrics")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.markdown(f'<p class="metric-value">{avg_bleu1:.3f}</p>', unsafe_allow_html=True)
+                        st.markdown('<p class="metric-label">Average BLEU-1</p>', unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.markdown(f'<p class="metric-value">{avg_bleu4:.3f}</p>', unsafe_allow_html=True)
+                        st.markdown('<p class="metric-label">Average BLEU-4</p>', unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col3:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.markdown(f'<p class="metric-value">{avg_rouge1:.3f}</p>', unsafe_allow_html=True)
+                        st.markdown('<p class="metric-label">Average ROUGE-1</p>', unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col4:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.markdown(f'<p class="metric-value">{avg_rougeL:.3f}</p>', unsafe_allow_html=True)
+                        st.markdown('<p class="metric-label">Average ROUGE-L</p>', unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # Visualizations
+                    st.subheader("Metric Visualization")
+                    
+                    # Create visualization dataframe
+                    viz_data = pd.DataFrame([{
+                        'ID': r['id'],
+                        'BLEU-1': r['bleu_1'],
+                        'BLEU-4': r['bleu_4'],
+                        'ROUGE-1': r['rouge1_f1'],
+                        'ROUGE-L': r['rougeL_f1']
+                    } for r in results])
+                    
+                    # Create bar chart for multiple items or radar chart for single item
+                    if len(results) > 1:
+                        # Reshape for seaborn
+                        viz_long = pd.melt(
+                            viz_data, 
+                            id_vars=['ID'], 
+                            value_vars=['BLEU-1', 'BLEU-4', 'ROUGE-1', 'ROUGE-L'],
+                            var_name='Metric', 
+                            value_name='Score'
+                        )
+                        
+                        # Create bar chart
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        sns.barplot(data=viz_long, x='ID', y='Score', hue='Metric', ax=ax)
+                        ax.set_ylim(0, 1)
+                        ax.set_title('Metric Comparison Across Items')
+                        ax.set_ylabel('Score')
+                        ax.set_xlabel('Item ID')
+                        if len(results) > 5:  # Rotate labels if many items
+                            plt.xticks(rotation=45, ha='right')
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        
+                        # Add histogram of scores
+                        st.subheader("Score Distribution")
+                        hist_data = pd.melt(
+                            viz_data, 
+                            value_vars=['BLEU-1', 'BLEU-4', 'ROUGE-1', 'ROUGE-L'],
+                            var_name='Metric', 
+                            value_name='Score'
+                        )
+                        
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        sns.histplot(data=hist_data, x='Score', hue='Metric', kde=True, bins=20, ax=ax)
+                        ax.set_title('Distribution of Scores')
+                        ax.set_xlim(0, 1)
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                    else:
+                        # Radar chart for single item
+                        categories = ['BLEU-1', 'BLEU-4', 'ROUGE-1', 'ROUGE-L']
+                        values = [
+                            results[0]['bleu_1'],
+                            results[0]['bleu_4'],
+                            results[0]['rouge1_f1'],
+                            results[0]['rougeL_f1']
+                        ]
+                        
+                        # Create radar chart
+                        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+                        
+                        # Compute angle for each category
+                        angles = np.linspace(0, 2*np.pi, len(categories), endpoint=False).tolist()
+                        values += values[:1]  # Close the polygon
+                        angles += angles[:1]  # Close the polygon
+                        categories += categories[:1]  # Close the polygon
+                        
+                        ax.plot(angles, values, 'o-', linewidth=2)
+                        ax.fill(angles, values, alpha=0.25)
+                        ax.set_thetagrids(np.degrees(angles[:-1]), categories[:-1])
+                        ax.set_ylim(0, 1)
+                        ax.grid(True)
+                        ax.set_title('Metric Scores')
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                    
+                    # Detailed results
+                    st.subheader("Detailed Results")
+                    
+                    for i, result in enumerate(results):
+                        with st.expander(f"Item {result['id']}", expanded=i==0):
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown("**Golden Data:**")
+                                st.text_area("", value=result['golden_text'], height=150, key=f"golden_{i}")
+                            
+                            with col2:
+                                st.markdown("**Model Prediction:**")
+                                st.text_area("", value=result['prediction_text'], height=150, key=f"pred_{i}")
+                            
+                            # Metrics table
+                            st.markdown("**Similarity Metrics:**")
+                            metrics_df = pd.DataFrame({
+                                'Metric': ['BLEU-1', 'BLEU-2', 'BLEU-3', 'BLEU-4', 
+                                          'ROUGE-1 (F1)', 'ROUGE-2 (F1)', 'ROUGE-L (F1)'],
+                                'Score': [
+                                    result['bleu_1'],
+                                    result['bleu_2'],
+                                    result['bleu_3'],
+                                    result['bleu_4'],
+                                    result['rouge1_f1'],
+                                    result['rouge2_f1'],
+                                    result['rougeL_f1']
+                                ]
+                            })
+                            st.dataframe(metrics_df, use_container_width=True)
+                    
+                    # Export options
+                    st.subheader("Export Results")
+                    export_format = st.selectbox("Export Format", ["CSV", "Excel", "JSON"])
+                    
+                    if st.button("Export Data"):
+                        # Convert results to a more export-friendly format
+                        export_data = pd.DataFrame([{
+                            'ID': r['id'],
+                            'Golden_Text': r['golden_text'],
+                            'Prediction_Text': r['prediction_text'],
+                            'BLEU_1': r['bleu_1'],
+                            'BLEU_2': r['bleu_2'],
+                            'BLEU_3': r['bleu_3'],
+                            'BLEU_4': r['bleu_4'],
+                            'ROUGE_1_F1': r['rouge1_f1'],
+                            'ROUGE_2_F1': r['rouge2_f1'],
+                            'ROUGE_L_F1': r['rougeL_f1']
+                        } for r in results])
+                        
+                        if export_format == "CSV":
+                            st.download_button(
+                                label="Download CSV",
+                                data=export_data.to_csv(index=False),
+                                file_name="prediction_comparison_results.csv",
+                                mime="text/csv"
+                            )
+                        elif export_format == "Excel":
+                            # In a real app, you would use a BytesIO buffer with pandas to_excel
+                            st.error("Excel export would be implemented here in a production app")
+                        elif export_format == "JSON":
+                            st.download_button(
+                                label="Download JSON",
+                                data=json.dumps(results, indent=2),
+                                file_name="prediction_comparison_results.json",
+                                mime="application/json"
+                            )
+                    
+    except Exception as e:
+        st.error(f"Error processing files: {e}")
+        st.error("Please make sure the uploaded files are valid JSON")
+else:
+    # Show instructions when files are not yet uploaded
+    st.info("Please upload golden data and model prediction files to begin comparison")
     
-    # Theme options
-    theme = st.selectbox(
-        "Theme",
-        ["Light", "Dark"],
-        index=0
-    )
-    
-    # Comparison method
-    comparison_method = st.radio(
-        "Primary Comparison Method",
-        ["BLEU Score", "ROUGE Score", "Both Equally"],
-        index=2
-    )
-    
-    # Visualization type
-    viz_type = st.selectbox(
-        "Visualization Type",
-        ["Bar Chart", "Radar Chart", "Heatmap"],
-        index=0
-    )
-    
-    st.markdown("### Advanced Settings")
-    
-    # BLEU settings
-    st.markdown("**BLEU Settings**")
-    bleu_smoothing = st.checkbox("Use Smoothing", value=True)
-    
-    # ROUGE settings
-    st.markdown("**ROUGE Settings**")
-    use_stemmer = st.checkbox("Use Stemmer", value=True)
-    
-    # Export options
-    st.markdown("### Export Options")
-    export_format = st.selectbox(
-        "Export Format",
-        ["CSV", "Excel", "JSON"],
-        index=0
-    )
-    
-    if st.session_state.processing_done and st.session_state.comparison_results:
-        if st.button("Export Results"):
-            # This would actually export the data in a real app
-            st.success("Export feature would be implemented here!")
-    
-    # About section
-    st.markdown("---")
-    st.markdown("### About")
     st.markdown("""
-    This tool helps educators compare student answers with teacher answers 
-    using NLP metrics like BLEU and ROUGE scores.
+    ### How to Use This Tool
     
-    Built with Streamlit, NLTK, and Rouge-score.
+    1. Upload your golden data (ground truth) JSON file using the sidebar
+    2. Upload your model predictions JSON file using the sidebar
+    3. Select the fields to compare from each file
+    4. If your files contain multiple items, select a common ID field to match them
+    5. Click "Run Comparison" to generate metrics and visualizations
+    
+    ### Supported Metrics
+    
+    - **BLEU scores** (1-gram to 4-gram)
+    - **ROUGE scores** (ROUGE-1, ROUGE-2, ROUGE-L)
+    
+    ### Expected JSON Format
+    
+    Your JSON files should contain either a single object or an array of objects.
+    Each object should have fields for the text you want to compare and ideally a common ID field.
+    
+    Example format:
+    ```json
+    [
+      {
+        "question": "What is the capital of France?",
+        "Teacher_Answer": "The capital of France is Paris.",
+        "Student_Answer": "Paris is the capital of France."
+      },
+      ...
+    ]
+    ```
     """)
+
+# Footer
+st.markdown("---")
+st.markdown(
+    "This tool evaluates model predictions against golden data using standard NLP metrics."
+)
