@@ -94,7 +94,7 @@ if golden_file and prediction_file:
         # Field selection
         st.header("Select Fields to Compare")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             golden_field = st.selectbox(
@@ -110,32 +110,21 @@ if golden_file and prediction_file:
                 index=prediction_fields.index("Student_Answer") if "Student_Answer" in prediction_fields else 0
             )
         
-        with col3:
-            id_field = st.selectbox(
-                "ID Field (for matching items)",
-                [field for field in golden_fields if field in prediction_fields],
-                index=0
-            )
-        
         # Calculate scores button
         if st.button("Calculate Scores", type="primary"):
             with st.spinner("Calculating scores..."):
-                # Create dictionaries for easy matching
-                golden_dict = {item.get(id_field, i): item for i, item in enumerate(golden_items)}
-                prediction_dict = {item.get(id_field, i): item for i, item in enumerate(prediction_items)}
+                # Determine the number of items to compare (minimum of both lists)
+                num_items = min(len(golden_items), len(prediction_items))
                 
-                # Find common IDs
-                common_ids = set(golden_dict.keys()).intersection(set(prediction_dict.keys()))
-                
-                if not common_ids:
-                    st.error("No matching items found between the golden data and predictions.")
+                if num_items == 0:
+                    st.error("No items found in one or both of the files.")
                 else:
-                    # Calculate scores for each matching item
+                    # Calculate scores for each matching item by index
                     results = []
                     
-                    for item_id in common_ids:
-                        golden_text = golden_dict[item_id].get(golden_field, "")
-                        prediction_text = prediction_dict[item_id].get(prediction_field, "")
+                    for i in range(num_items):
+                        golden_text = golden_items[i].get(golden_field, "")
+                        prediction_text = prediction_items[i].get(prediction_field, "")
                         
                         # Skip empty texts
                         if not golden_text or not prediction_text:
@@ -146,7 +135,7 @@ if golden_file and prediction_file:
                         rouge1_f1, rouge2_f1, rougeL_f1 = calculate_rouge(golden_text, prediction_text)
                         
                         results.append({
-                            'id': item_id,
+                            'index': i,
                             'bleu_1': bleu_1,
                             'bleu_2': bleu_2,
                             'bleu_3': bleu_3,
@@ -162,7 +151,7 @@ if golden_file and prediction_file:
                         
                         # Create dataframe for display
                         df = pd.DataFrame([{
-                            'ID': r['id'],
+                            'Index': r['index'],
                             'BLEU-1': r['bleu_1'],
                             'BLEU-2': r['bleu_2'],
                             'BLEU-3': r['bleu_3'],
@@ -199,6 +188,12 @@ if golden_file and prediction_file:
                             file_name="comparison_scores.csv",
                             mime="text/csv"
                         )
+                        
+                        # Display size information
+                        st.info(f"Compared {len(results)} items out of {num_items} total items.")
+                        
+                        if len(golden_items) != len(prediction_items):
+                            st.warning(f"Note: The golden data contains {len(golden_items)} items while the prediction data contains {len(prediction_items)} items. Only the first {num_items} items were compared.")
                     else:
                         st.error("No valid text comparisons could be made.")
     
