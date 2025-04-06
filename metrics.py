@@ -119,14 +119,22 @@ if golden_file and prediction_file:
                 if num_items == 0:
                     st.error("No items found in one or both of the files.")
                 else:
-                    # Calculate scores for each matching item by index
+                    # Calculate scores for each pair by index
                     results = []
+                    all_text_pairs = []
                     
                     for i in range(num_items):
                         golden_text = golden_items[i].get(golden_field, "")
                         prediction_text = prediction_items[i].get(prediction_field, "")
                         
-                        # Skip empty texts
+                        # Store all text pairs regardless of emptiness
+                        all_text_pairs.append({
+                            'index': i,
+                            'golden_text': golden_text,
+                            'prediction_text': prediction_text
+                        })
+                        
+                        # Skip empty texts for score calculation
                         if not golden_text or not prediction_text:
                             continue
                         
@@ -145,12 +153,26 @@ if golden_file and prediction_file:
                             'rougeL_f1': rougeL_f1
                         })
                     
+                    # Display text content for each index with expandable sections
+                    st.header("Text Pairs (Index by Index)")
+                    
+                    for i, pair in enumerate(all_text_pairs):
+                        with st.expander(f"Index {pair['index']}", expanded=i == 0):
+                            golden_col, pred_col = st.columns(2)
+                            
+                            with golden_col:
+                                st.subheader("Golden Text")
+                                st.text_area("", value=pair['golden_text'], height=200, key=f"golden_{i}")
+                            
+                            with pred_col:
+                                st.subheader("Prediction Text")
+                                st.text_area("", value=pair['prediction_text'], height=200, key=f"pred_{i}")
+                    
                     if results:
                         # Display results as a table
                         st.header("Comparison Scores")
                         
-
-                        # Create dataframe for scores display
+                        # Create dataframe for display
                         df = pd.DataFrame([{
                             'Index': r['index'],
                             'BLEU-1': r['bleu_1'],
