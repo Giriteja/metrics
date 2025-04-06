@@ -149,7 +149,8 @@ if golden_file and prediction_file:
                         # Display results as a table
                         st.header("Comparison Scores")
                         
-                        # Create dataframe for display
+
+                        # Create dataframe for scores display
                         df = pd.DataFrame([{
                             'Index': r['index'],
                             'BLEU-1': r['bleu_1'],
